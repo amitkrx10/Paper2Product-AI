@@ -1,0 +1,19 @@
+# NOTE ON ISOLATION: inside this compose file the API runs the LOCAL sandbox (clearly labelled "NOT isolated" in the UI,
+# report and manifest) because we deliberately do NOT mount the host Docker socket into any container.
+# For real per-run Docker isolation run the API on a host that has Docker:  see README "Secure sandbox mode".
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    env_file: [.env]
+    environment:
+      P2P_SANDBOX: local
+    volumes: ["p2p-data:/data"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    mem_limit: 2g
+    pids_limit: 256
+volumes:
+  p2p-data:

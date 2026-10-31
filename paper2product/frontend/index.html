@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper2Product AI</title>
+<style>
+:root{--bg:#f6f7fb;--panel:#fff;--ink:#14171f;--mute:#5d6577;--line:#e2e6ef;--brand:#4f46e5;--ok:#0f9d58;--warn:#d97706;--bad:#dc2626;--code:#0f172a;--codeink:#e2e8f0}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--panel:#161b22;--ink:#e6edf3;--mute:#8b949e;--line:#30363d;--brand:#818cf8;--code:#010409}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+header h1{font-size:17px;margin:0;margin-right:auto}header h1 span{color:var(--brand)}
+nav button{background:none;border:0;color:var(--mute);font:inherit;padding:6px 12px;border-radius:8px;cursor:pointer}
+nav button.on{background:var(--brand);color:#fff}
+main{max-width:1200px;margin:0 auto;padding:20px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 10px;font-size:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+button.btn{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+button.btn.sec{background:transparent;color:var(--ink);border:1px solid var(--line)}button.btn.bad{background:var(--bad)}
+button:disabled{opacity:.5;cursor:not-allowed}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%}
+textarea{font-family:ui-monospace,Menlo,monospace;font-size:13px;min-height:90px}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 3px}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;border:1px solid var(--line);color:var(--mute)}
+.pill.ok{color:var(--ok);border-color:var(--ok)}.pill.warn{color:var(--warn);border-color:var(--warn)}.pill.bad{color:var(--bad);border-color:var(--bad)}
+.banner{padding:10px 14px;border-radius:10px;border:1px solid var(--warn);color:var(--warn);margin-bottom:14px;font-size:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.sp{margin-left:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.stages{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}.stage{padding:4px 10px;border-radius:8px;border:1px solid var(--line);font-size:12px;color:var(--mute)}
+.stage.done{color:var(--ok);border-color:var(--ok)}.stage.cur{background:var(--brand);color:#fff;border-color:var(--brand)}.stage.fail{color:var(--bad);border-color:var(--bad)}
+pre.code,pre.log{background:var(--code);color:var(--codeink);border-radius:10px;padding:12px;overflow:auto;font:12.5px/1.5 ui-monospace,Menlo,monospace;max-height:420px;margin:0;white-space:pre-wrap}
+.ev{padding:2px 0}.ev.error{color:#f87171}.ev.warn{color:#fbbf24}.ev .st{color:#7dd3fc}
+.files{display:flex;gap:14px}.tree{min-width:220px;max-width:260px}.tree div{padding:4px 8px;border-radius:6px;cursor:pointer;font:13px ui-monospace,monospace}.tree div:hover,.tree div.on{background:var(--brand);color:#fff}
+.bar{height:16px;background:var(--line);border-radius:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--brand)}
+.cm td{text-align:center;font-weight:600;border:1px solid var(--line)}
+.diffp{color:#4ade80}.diffm{color:#f87171}
+.mute{color:var(--mute)}
+@media(max-width:700px){.files{flex-direction:column}.tree{max-width:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Paper<span>2</span>Product AI <span class="mute" style="font-weight:400;font-size:13px">research → verified code</span></h1>
+  <nav id="nav"></nav><span id="modechip" class="pill">…</span>
+</header>
+<main id="app"></main>
+<script>
+const API = '';
+const KEY = sessionStorage.getItem('p2p_key') || '';
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, ''); else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;                                   // text only: nothing from a PDF is ever parsed as HTML
+}
+async function api(path, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers, KEY ? { 'X-API-Key': KEY } : {});
+  const r = await fetch(API + path, opts);
+  const ct = r.headers.get('content-type') || '';
+  const body = ct.includes('json') ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((body && body.error) || ('HTTP ' + r.status));
+  return body;
+}
+const post = (p, b) => api(p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b || {}) });
+function toast(msg, bad) { const t = h('div', { class: 'banner', style: 'position:fixed;right:16px;bottom:16px;background:var(--panel);z-index:9;' + (bad ? 'color:var(--bad);border-color:var(--bad)' : '') }, msg); document.body.append(t); setTimeout(() => t.remove(), 5000); }
+const STAGES = ['ingesting', 'awaiting_spec_approval', 'planning', 'awaiting_plan_approval', 'resolving_data', 'generating', 'testing', 'repairing', 'executing', 'evaluating', 'reporting', 'completed'];
+const REPRO = { reproduced: ['ok', 'Successfully reproduced'], partially_reproduced: ['warn', 'Partially reproduced'], not_reproduced: ['bad', 'Not reproduced'], unable_to_verify: ['warn', 'Unable to verify'] };
+let view = 'dash', current = null, es = null, poll = null, integ = null;
+
+function nav() {
+  const n = $('#nav'); n.replaceChildren();
+  for (const [k, l] of [['dash', 'Dashboard'], ['new', 'New project'], ['proj', 'Workspace']])
+    n.append(h('button', { class: view === k ? 'on' : '', onclick: () => go(k) }, l));
+}
+function go(v, id) { view = v; if (id) current = id; if (es) { es.close(); es = null; } clearInterval(poll); nav(); render(); }
+async function render() {
+  const app = $('#app'); app.replaceChildren(h('div', { class: 'mute' }, 'Loading…'));
+  try { app.replaceChildren(...await ({ dash: vDash, new: vNew, proj: vProj }[view])()); } catch (e) { app.replaceChildren(h('div', { class: 'banner' }, 'Error: ' + e.message)); }
+}
+function statusPill(p) {
+  if (p.reproduction_status && ['completed', 'blocked'].includes(p.status)) { const [c, t] = REPRO[p.reproduction_status]; return h('span', { class: 'pill ' + c }, t); }
+  return h('span', { class: 'pill ' + (['failed', 'blocked', 'cancelled'].includes(p.status) ? 'bad' : 'warn') }, p.status.replaceAll('_', ' '));
+}
+async function vDash() {
+  const ps = await api('/api/projects');
+  return [
+    h('div', { class: 'card' }, h('h2', {}, 'Run the verifiable demo'),
+      h('p', { class: 'mute' }, 'Uses a clearly-labelled synthetic fixture paper (Fisher-style LDA on Iris). A deliberate bug is injected so you can watch the agent diagnose and repair it. All metrics come from code really executed in the sandbox.'),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn', onclick: () => demo(true) }, 'Start demo (with injected fault)'),
+        h('button', { class: 'btn sec', onclick: () => demo(false) }, 'Start demo (no fault)'))),
+    h('div', { class: 'card' }, h('h2', {}, 'Projects'),
+      ps.length ? h('table', {}, h('tr', {}, ...['Name', 'Status', 'Mode', 'Repairs', 'Created', ''].map(x => h('th', {}, x))),
+        ps.map(p => h('tr', {}, h('td', {}, p.name), h('td', {}, statusPill(p)), h('td', {}, p.mode || ''), h('td', {}, p.repair_attempts),
+          h('td', { class: 'mute' }, new Date(p.created * 1000).toLocaleString()), h('td', {}, h('button', { class: 'btn sec', onclick: () => go('proj', p.id) }, 'Open')))))
+        : h('div', { class: 'mute' }, 'No projects yet. Start the demo or upload a paper.'))
+  ];
+}
+async function demo(fault) { try { const r = await post('/api/demo', { inject_fault: fault }); go('proj', r.id); } catch (e) { toast(e.message, true); } }
+async function vNew() {
+  const f = h('form', { onsubmit: async ev => {
+    ev.preventDefault(); const fd = new FormData(ev.target);
+    try { const r = await api('/api/projects', { method: 'POST', body: fd }); go('proj', r.id); } catch (e) { toast(e.message, true); }
+  } },
+    h('label', {}, 'Research paper (PDF, max 20 MB)'), h('input', { type: 'file', name: 'file', accept: 'application/pdf', required: true }),
+    h('label', {}, 'Dataset source (optional): sklearn:iris | hf:<dataset-id> | upload:<name>'), h('input', { name: 'dataset_source', placeholder: 'leave empty to auto-detect' }),
+    h('div', { class: 'grid' },
+      h('div', {}, h('label', {}, 'Max automated repair attempts (0-10)'), h('input', { type: 'number', name: 'max_repairs', value: 3, min: 0, max: 10 })),
+      h('div', {}, h('label', {}, 'Execution timeout per run (seconds)'), h('input', { type: 'number', name: 'exec_timeout_s', value: 120, min: 1, max: 1800 }))),
+    h('label', {}, h('input', { type: 'checkbox', name: 'inject_fault', value: 'true', style: 'width:auto;margin-right:6px' }), 'Inject a deliberate bug (demo of the repair loop; template papers only)'),
+    h('p', { class: 'mute' }, 'Nothing is executed until you approve the extracted specification and the plan.'),
+    h('button', { class: 'btn', type: 'submit' }, 'Upload & extract'));
+  return [h('div', { class: 'card' }, h('h2', {}, 'New research project'), f)];
+}
+
+async function vProj() {
+  if (!current) return [h('div', { class: 'card mute' }, 'Select a project from the dashboard.')];
+  const p = await api('/api/projects/' + current), st = p.state;
+  const root = h('div', {}), live = h('pre', { class: 'log', id: 'live' });
+  const out = [root];
+  const draw = async () => {
+    const q = await api('/api/projects/' + current); drawProject(root, q, live);
+  };
+  drawProject(root, p, live);
+  const evs = await api(`/api/projects/${current}/events`); for (const e of evs) addEv(live, e);
+  let last = evs.length ? evs[evs.length - 1].id : 0;
+  if (!['completed', 'failed', 'blocked', 'cancelled'].includes(p.status)) {
+    poll = setInterval(async () => {
+      try {
+        const n = await api(`/api/projects/${current}/events?after=${last}`);
+        for (const e of n) { addEv(live, e); last = e.id; }
+        const q = await api('/api/projects/' + current);
+        if (n.length || q.status !== p.status) { p.status = q.status; drawProject(root, q, live); }
+        if (['completed', 'failed', 'blocked', 'cancelled'].includes(q.status)) { clearInterval(poll); drawProject(root, q, live); }
+      } catch (e) { /* transient */ }
+    }, 1000);
+  }
+  return out;
+}
+function addEv(box, e) {
+  const t = new Date(e.ts * 1000).toLocaleTimeString();
+  box.append(h('div', { class: 'ev ' + e.level }, `${t} `, h('span', { class: 'st' }, `[${e.stage}] `), e.message));
+  box.scrollTop = box.scrollHeight;
+}
+function stageBar(status) {
+  const i = STAGES.indexOf(status), bad = ['failed', 'blocked', 'cancelled'].includes(status);
+  return h('div', { class: 'stages' }, STAGES.map((s, k) => h('span', { class: 'stage ' + (s === status ? 'cur' : (k < i || status === 'completed') ? 'done' : ''), }, s.replaceAll('_', ' '))),
+    bad ? h('span', { class: 'stage fail' }, status) : null);
+}
+function drawProject(root, p, live) {
+  const st = p.state, prev = root.dataset.status; root.dataset.status = p.status;
+  const keepTab = root.dataset.tab || 'spec';
+  root.replaceChildren();
+  root.append(h('div', { class: 'row', style: 'margin-bottom:10px' }, h('h2', { style: 'margin:0' }, p.name), statusPill({ status: p.status, reproduction_status: st.reproduction_status }),
+    h('span', { class: 'pill' }, st.mode === 'demo' ? 'DEMO MODE – no LLM' : 'LLM: ' + ((st.llm_info || {}).model || 'on')),
+    st.sandbox ? h('span', { class: 'pill ' + (st.sandbox.isolated ? 'ok' : 'warn') }, 'sandbox: ' + st.sandbox.mode + (st.sandbox.isolated ? '' : ' (NOT isolated)')) : null,
+    h('span', { class: 'sp' }), !['completed', 'failed', 'blocked', 'cancelled'].includes(p.status) ? h('button', { class: 'btn bad', onclick: () => post(`/api/projects/${p.id}/cancel`).then(() => toast('Cancel requested')).catch(e => toast(e.message, true)) }, 'Stop / cancel') : null));
+  root.append(stageBar(p.status));
+  if (st.sandbox && !st.sandbox.isolated) root.append(h('div', { class: 'banner' }, st.sandbox.note));
+  if (st.blocked_reason) root.append(h('div', { class: 'banner', style: 'color:var(--bad);border-color:var(--bad)' }, 'Stopped: ' + st.blocked_reason));
+  if (p.status === 'awaiting_spec_approval') root.append(specGate(p));
+  if (p.status === 'awaiting_plan_approval') root.append(planGate(p));
+  root.append(h('div', { class: 'card' }, h('h2', {}, 'Live agent activity'), live,
+    h('div', { class: 'mute', style: 'margin-top:6px' }, `Repair attempts used: ${st.attempts.length} / ${(st.budget || {}).max_repairs ?? 3}`)));
+  const tabs = [['spec', 'Specification'], ['code', 'Code & diffs'], ['exp', 'Experiment'], ['rep', 'Report']];
+  const body = h('div', {});
+  const bar = h('div', { class: 'row', style: 'margin-bottom:10px' }, tabs.map(([k, l]) => h('button', { class: 'btn ' + (k === keepTab ? '' : 'sec'), onclick: () => { root.dataset.tab = k; drawProject(root, p, live); } }, l)));
+  root.append(bar, body);
+  ({ spec: tSpec, code: tCode, exp: tExp, rep: tRep }[keepTab])(body, p);
+}
+function specGate(p) {
+  const s = p.state.spec; const ta = (v) => h('textarea', {}, v);
+  const hp = ta(JSON.stringify(s.hyperparameters, null, 2)), ds = ta(s.datasets.join('\n')), rr = ta(JSON.stringify(s.reported_results, null, 2));
+  return h('div', { class: 'card' }, h('h2', {}, 'Review & correct the extracted specification'),
+    s.security_flags.length ? h('div', { class: 'banner' }, `Security: ${s.security_flags.length} prompt-injection pattern(s) were detected in the PDF. They are treated as data and will never be obeyed.`) : null,
+    s.missing_info.length ? h('div', { class: 'banner' }, 'Missing in paper: ' + s.missing_info.join('; ')) : null,
+    h('div', { class: 'grid' }, h('div', {}, h('label', {}, 'Hyperparameters (JSON)'), hp), h('div', {}, h('label', {}, 'Datasets (one per line)'), ds), h('div', {}, h('label', {}, 'Reported results (JSON)'), rr)),
+    h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'btn', onclick: async () => {
+      try { await post(`/api/projects/${p.id}/approve-spec`, { edits: { hyperparameters: JSON.parse(hp.value), datasets: ds.value.split('\n').map(x => x.trim()).filter(Boolean), reported_results: JSON.parse(rr.value) } }); go('proj', p.id); }
+      catch (e) { toast(e.message, true); } } }, 'Approve specification & plan')));
+}
+function planGate(p) {
+  const pl = p.state.plan; const cb = h('input', { type: 'checkbox', style: 'width:auto;margin-right:6px' });
+  return h('div', { class: 'card' }, h('h2', {}, 'Approve implementation plan (grants execution permission)'),
+    h('p', {}, pl.approach), h('table', {}, pl.tasks.map(t => h('tr', {}, h('td', {}, t.id), h('td', {}, t.title), h('td', { class: 'mute' }, 'depends: ' + (t.depends_on.join(', ') || '–'))))),
+    h('p', {}, h('b', {}, 'Risks: '), pl.risks.join(' · ')), h('p', {}, h('b', {}, 'Compute: '), pl.compute),
+    h('h2', {}, 'Assumptions you must accept'), h('ul', {}, pl.assumptions.map(a => h('li', {}, a))),
+    h('label', { style: 'color:var(--ink)' }, cb, 'I accept these assumptions and allow the generated code to run in the sandbox'),
+    h('button', { class: 'btn', onclick: async () => { try { await post(`/api/projects/${p.id}/approve-plan`, { accept_assumptions: cb.checked }); go('proj', p.id); } catch (e) { toast(e.message, true); } } }, 'Approve & run'));
+}
+function tSpec(body, p) {
+  const s = p.state.spec; if (!s) return body.append(h('div', { class: 'card mute' }, 'Specification not extracted yet.'));
+  const row = (k, v, pg) => h('tr', {}, h('th', {}, k), h('td', {}, v), h('td', { class: 'mute' }, pg ? 'p.' + pg.join(',') : ''));
+  body.append(h('div', { class: 'card' }, h('table', {}, row('Title', s.title), row('Authors', s.authors.join(', ')), row('Method', s.method, s.page_refs.method), row('Equations', s.equations.join(' | '), s.page_refs.equations),
+    row('Datasets', s.datasets.join('; '), s.page_refs.datasets), row('Hyperparameters', JSON.stringify(s.hyperparameters), s.page_refs.hyperparameters), row('Metrics', s.metrics.join(', '), s.page_refs.metrics),
+    row('Reported', s.reported_results.map(r => `${r.metric}=${r.value} (${r.dataset || '?'}, ${r.split || 'split ?'})`).join('; '), s.page_refs.results), row('Extraction', s.extraction_method))));
+}
+async function tCode(body, p) {
+  if (!p.state.files.length) return body.append(h('div', { class: 'card mute' }, 'No files generated yet.'));
+  const f = await api(`/api/projects/${p.id}/files`), view = h('pre', { class: 'code' }, 'Select a file');
+  const tree = h('div', { class: 'tree' }, f.files.map(x => h('div', { onclick: async ev => { [...tree.children].forEach(c => c.classList.remove('on')); ev.target.classList.add('on'); view.textContent = await api(`/api/projects/${p.id}/file?path=${encodeURIComponent(x)}`); } }, x)));
+  body.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', {}, 'Generated project (read-only)'), h('span', { class: 'sp' }),
+    p.state.manifest ? h('a', { href: `/api/projects/${p.id}/download` }, h('button', { class: 'btn' }, 'Download project ZIP')) : null), h('div', { class: 'files' }, tree, h('div', { style: 'flex:1;min-width:0' }, view))));
+  if (f.diffs.length) body.append(h('div', { class: 'card' }, h('h2', {}, 'Repair diffs'), f.diffs.map(d => h('div', {}, h('b', {}, `Attempt ${d.attempt}: ${d.file}`),
+    h('pre', { class: 'code' }, d.diff.split('\n').map(l => h('div', { class: l.startsWith('+') && !l.startsWith('+++') ? 'diffp' : l.startsWith('-') && !l.startsWith('---') ? 'diffm' : '' }, l)))))));
+}
+function tExp(body, p) {
+  const s = p.state, m = s.metrics;
+  if (!m) return body.append(h('div', { class: 'card mute' }, 'No measured metrics yet.'));
+  const bars = ['accuracy', 'precision', 'recall', 'f1'].map(k => h('div', { style: 'margin:6px 0' }, h('div', { class: 'row' }, k + ' (macro)'.replace(' (macro)', k === 'accuracy' ? '' : ' (macro)'), h('span', { class: 'sp' }, m[k].toFixed(4))), h('div', { class: 'bar' }, h('i', { style: `width:${(m[k] * 100).toFixed(1)}%` }))));
+  const cm = h('table', { class: 'cm' }, h('tr', {}, h('th', {}, 'true \\ pred'), m.labels.map(l => h('th', {}, l))), m.confusion_matrix.map((r, i) => h('tr', {}, h('th', {}, m.labels[i]), r.map(v => h('td', { style: `background:rgba(79,70,229,${Math.min(0.15 + v / 20, 0.85)})` }, v)))));
+  const ds = s.dataset || {}, meta = s.run_meta || {};
+  body.append(h('div', { class: 'grid' },
+    h('div', { class: 'card' }, h('h2', {}, `Measured metrics (n=${m.n}, computed independently)`), bars, s.script_metric_check ? h('div', { class: 'mute' }, 'Cross-check: ' + s.script_metric_check) : null),
+    h('div', { class: 'card' }, h('h2', {}, 'Confusion matrix'), cm),
+    h('div', { class: 'card' }, h('h2', {}, 'Run & dataset details'), h('table', {}, [['Dataset', `${ds.name} (${ds.source})`], ['Version', ds.version], ['License', ds.license], ['Seed', meta.seed], ['Test fraction', meta.test_size], ['Runtime', (meta.runtime_s ?? '?') + ' s'], ['Python', (meta.environment || {}).python], ['NumPy', (meta.environment || {}).numpy], ['scikit-learn', (meta.environment || {}).scikit_learn]].map(([a, b]) => h('tr', {}, h('th', {}, a), h('td', {}, b ?? '–')))))));
+  const t = h('div', { class: 'card' }, h('h2', {}, 'Reported vs reproduced'), s.comparisons.length ? h('table', {}, h('tr', {}, ['Metric', 'Reported', 'Measured', 'Abs diff', 'Rel diff', 'Verdict'].map(x => h('th', {}, x))),
+    s.comparisons.map(c => [h('tr', {}, h('td', {}, c.metric), h('td', {}, c.reported), h('td', {}, c.measured == null ? '–' : c.measured.toFixed(4)), h('td', {}, c.abs_diff == null ? '–' : c.abs_diff.toFixed(4)), h('td', {}, c.rel_diff == null ? '–' : (c.rel_diff * 100).toFixed(2) + '%'), h('td', {}, h('span', { class: 'pill ' + REPRO[c.status][0] }, REPRO[c.status][1]))),
+      ...c.warnings.map(w => h('tr', {}, h('td', { colspan: 6, class: 'mute' }, '⚠ ' + w)))])) : h('div', { class: 'mute' }, 'No reported numbers to compare.'));
+  body.append(t);
+}
+async function tRep(body, p) {
+  if (!p.state.manifest) return body.append(h('div', { class: 'card mute' }, 'Report not generated yet.'));
+  const md = await api(`/api/projects/${p.id}/report`);
+  body.append(h('div', { class: 'card' }, h('div', { class: 'row' }, h('h2', {}, 'Final report'), h('span', { class: 'sp' }),
+    h('a', { href: `/api/projects/${p.id}/report` }, h('button', { class: 'btn sec' }, 'Download report.md')),
+    h('a', { href: `/api/projects/${p.id}/manifest` }, h('button', { class: 'btn sec' }, 'Manifest JSON')),
+    h('a', { href: `/api/projects/${p.id}/download` }, h('button', { class: 'btn' }, 'Project ZIP'))), h('pre', { class: 'code' }, md)));
+  const repo = h('input', { placeholder: 'new-repo-name' }), cb = h('input', { type: 'checkbox', style: 'width:auto;margin-right:6px' });
+  body.append(h('div', { class: 'card' }, h('h2', {}, 'Optional: export to a NEW private GitHub repository'),
+    h('p', { class: 'mute' }, 'Requires GITHUB_TOKEN on the server and your explicit confirmation. Nothing is published otherwise.'), repo,
+    h('label', { style: 'color:var(--ink)' }, cb, 'I authorise creating this repository and uploading the generated files'),
+    h('button', { class: 'btn', onclick: async () => { try { const r = await post(`/api/projects/${p.id}/github-export`, { name: repo.value, confirm: cb.checked, private: true }); toast('Created ' + r.full_name); } catch (e) { toast(e.message, true); } } }, 'Export')));
+}
+(async () => {
+  nav(); render();
+  try { integ = await api('/api/integrations'); const c = $('#modechip'); c.textContent = integ.llm.configured ? 'LLM: ' + integ.llm.model : 'DEMO MODE (no LLM key)'; c.className = 'pill ' + (integ.llm.configured ? 'ok' : 'warn'); c.title = JSON.stringify(integ, null, 1); } catch (e) { }
+})();
+</script>
+</body>
+</html>
